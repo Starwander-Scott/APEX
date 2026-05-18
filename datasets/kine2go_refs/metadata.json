@@ -1,0 +1,187 @@
+{
+  "name": "Kine2Go",
+  "version": "0.1.0",
+  "description": "Kinematic dataset for the Unitree Go2 quadruped robot, containing reference motions retargeted from natural and synthetic quadruped sources, together with imitation-learning training artifacts (per-clip PPO policy and 20 perturbed rollouts with rendered video) for diverse gaits and motions.",
+  "robot": "Unitree Go2",
+  "fps": 60,
+  "n_clips": 40,
+  "rollouts_per_clip": 20,
+  "n_rollouts": 800,
+  "subsets": {
+    "ai4_dog": {
+      "n_clips": 15,
+      "n_rollouts": 300,
+      "license": "CC BY-NC 4.0"
+    },
+    "ai4_dog_synth": {
+      "n_clips": 7,
+      "n_rollouts": 140,
+      "license": "CC BY-NC 4.0"
+    },
+    "solo8": {
+      "n_clips": 6,
+      "n_rollouts": 120,
+      "license": "BSD-3-Clause"
+    },
+    "vhdc": {
+      "n_clips": 12,
+      "n_rollouts": 240,
+      "license": "CC BY-SA 4.0"
+    }
+  },
+  "reference_motion": {
+    "file": "motion.npy",
+    "shape": "(T_ref, 61)",
+    "dtype": "float32",
+    "field_layout": [
+      {
+        "slice": "[0:18]",
+        "name": "dofs_position",
+        "note": "6 floating-base DOFs followed by 12 joint DOFs in the order FR_hip, FR_thigh, FR_calf, FL_hip, FL_thigh, FL_calf, RR_hip, RR_thigh, RR_calf, RL_hip, RL_thigh, RL_calf"
+      },
+      {
+        "slice": "[18:36]",
+        "name": "dofs_velocity",
+        "note": "same DOF order as dofs_position"
+      },
+      {
+        "slice": "[36:48]",
+        "name": "feet_pos",
+        "note": "world-frame xyz for 4 feet, ordered FL_foot, RL_foot, FR_foot, RR_foot"
+      },
+      {
+        "slice": "[48:51]",
+        "name": "base_pos",
+        "note": "world-frame (x, y, z)"
+      },
+      {
+        "slice": "[51:55]",
+        "name": "base_quat",
+        "note": "scalar-first quaternion (w, x, y, z)"
+      },
+      {
+        "slice": "[55:58]",
+        "name": "base_lin_vel",
+        "note": "world-frame (x, y, z)"
+      },
+      {
+        "slice": "[58:61]",
+        "name": "base_ang_vel",
+        "note": "world-frame (x, y, z)"
+      }
+    ]
+  },
+  "rollouts": {
+    "trajectory_format": "list; each entry is one simulator step",
+    "init_state_file": "traj_NNNN/init_state.pkl",
+    "trajectory_file": "traj_NNNN/traj.pkl",
+    "video_file": "traj_NNNN/traj.mp4",
+    "frame_layout": [
+      {
+        "key": "dof_pos",
+        "shape": "(1, 12)",
+        "dtype": "float32",
+        "note": "joint angles, 12 DOFs in the order FR_hip, FR_thigh, FR_calf, FL_hip, FL_thigh, FL_calf, RR_hip, RR_thigh, RR_calf, RL_hip, RL_thigh, RL_calf"
+      },
+      {
+        "key": "dof_vel",
+        "shape": "(1, 12)",
+        "dtype": "float32",
+        "note": "joint velocities, same DOF order as dof_pos"
+      },
+      {
+        "key": "base_quat",
+        "shape": "(1, 4)",
+        "dtype": "float32",
+        "note": "base orientation, scalar-first quaternion (w, x, y, z)"
+      },
+      {
+        "key": "base_ang_vel",
+        "shape": "(1, 3)",
+        "dtype": "float32",
+        "note": "base angular velocity (x, y, z)"
+      },
+      {
+        "key": "actions",
+        "shape": "(1, 12)",
+        "dtype": "float32",
+        "note": "PPO policy output for the step (per-joint, same DOF order as dof_pos)"
+      },
+      {
+        "key": "frame",
+        "shape": "(1,)",
+        "dtype": "int32",
+        "note": "episode-relative simulator step counter"
+      },
+      {
+        "key": "links_pos",
+        "shape": "(17, 3)",
+        "dtype": "float32",
+        "note": "world-frame xyz per link"
+      },
+      {
+        "key": "links_rot",
+        "shape": "(17, 6)",
+        "dtype": "float32",
+        "note": "6-d continuous rotation representation per link"
+      }
+    ]
+  },
+  "policy": {
+    "file": "logs/model.pt",
+    "framework": "PPO via rsl_rl_lib (hyperparameters in config.json::policy_cfg)"
+  },
+  "conventions": {
+    "axes": "Z-up (X forward, Y left, Z up)",
+    "linear_units": "meters",
+    "angular_units": "radians",
+    "quaternion_order": "scalar-first (w, x, y, z)",
+    "joint_order": [
+      "FR_hip_joint",
+      "FR_thigh_joint",
+      "FR_calf_joint",
+      "FL_hip_joint",
+      "FL_thigh_joint",
+      "FL_calf_joint",
+      "RR_hip_joint",
+      "RR_thigh_joint",
+      "RR_calf_joint",
+      "RL_hip_joint",
+      "RL_thigh_joint",
+      "RL_calf_joint"
+    ],
+    "feet_order": [
+      "FL_foot",
+      "RL_foot",
+      "FR_foot",
+      "RR_foot"
+    ]
+  },
+  "citations": [
+    {
+      "key": "ai4animation",
+      "ref": "H. Zhang et al., 'Mode-Adaptive Neural Networks for Quadruped Motion Control', SIGGRAPH 2018",
+      "url": "https://github.com/sebastianstarke/AI4Animation/tree/master/AI4Animation/SIGGRAPH_2018",
+      "applies_to": [
+        "ai4_dog",
+        "ai4_dog_synth"
+      ]
+    },
+    {
+      "key": "vhdc",
+      "ref": "Vienna Horse Data Collection",
+      "url": "https://horse.cs.uni-bonn.de/vhdc-home.html",
+      "applies_to": [
+        "vhdc"
+      ]
+    },
+    {
+      "key": "cassi",
+      "ref": "C. Li et al., 'Versatile Skill Control via Self-supervised Adversarial Imitation of Unlabeled Mixed Motions', ICRA 2023",
+      "url": "https://github.com/martius-lab/cassi",
+      "applies_to": [
+        "solo8"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+clip,source_frames,frames,input_fps,output_fps,duration_s,joint_layout,height_min,height_mean,height_max,mean_abs_vx,mean_abs_wz,command_mode,command_vx,command_vy,command_wz,license,tags,csv
+ai4_dog_pace,593,494,60.000000,50.000000,9.860000,joint_type,0.147415,0.303843,0.337447,0.792857,0.339325,mean,0.791989,-0.075231,-0.015749,CC BY-NC 4.0,pace,D:\Desktop\robot\APEX\imitation_data\kine2go\ai4_dog_pace.csv
+ai4_dog_trot_00,548,457,60.000000,50.000000,9.120000,joint_type,0.286700,0.322091,0.341058,0.837754,0.260970,mean,0.836158,0.010744,-0.008476,CC BY-NC 4.0,trot,D:\Desktop\robot\APEX\imitation_data\kine2go\ai4_dog_trot_00.csv
+ai4_dog_walk_00,593,494,60.000000,50.000000,9.860000,joint_type,0.147415,0.303843,0.337447,0.792857,0.339325,mean,0.791989,-0.075231,-0.015749,CC BY-NC 4.0,walk,D:\Desktop\robot\APEX\imitation_data\kine2go\ai4_dog_walk_00.csv

@@ -1,0 +1,27 @@
+Kine2Go is a multi-license dataset. There is no single umbrella license; each
+clip ships under the license inherited from its upstream source. The
+authoritative per-clip license is recorded in `<clip_name>/clip.json` under the
+`license` field, and aggregate per-subset assignments are summarised below.
+
+| Subset (clip prefix)                           | Clips | License        | Full text                                |
+| ---------------------------------------------- | ----- | -------------- | ---------------------------------------- |
+| ai4_dog_* (excluding ai4_dog_synth_*)          |    15 | CC BY-NC 4.0   | LICENSES/AI4Animation_CC-BY-NC-4.0.txt   |
+| ai4_dog_synth_*                                |     7 | CC BY-NC 4.0   | LICENSES/AI4Animation_CC-BY-NC-4.0.txt   |
+| vhdc_horse1_*                                  |    12 | CC BY-SA 4.0   | LICENSES/VHDC_CC-BY-SA-4.0.txt           |
+| solo8_*                                        |     6 | BSD-3-Clause   | LICENSES/cassi_BSD-3-Clause.txt          |
+
+Notes:
+
+- The CC BY-NC 4.0 subsets prohibit commercial use of the data and any
+  derivative works.
+- The VHDC subset is licensed under CC BY-SA 4.0 (upgraded from the upstream's
+  CC BY-SA 3.0 Unported per the SA-4.0 compatibility clause). Derivatives must
+  be released under CC BY-SA 4.0 (or a later compatible version).
+- The cassi/Solo8 subset license is inherited by analogy with cassi's top-level
+  code grant; see LICENSES/cassi_BSD-3-Clause.txt for the binding text.
+
+The supporting documentation in this repository -- README.md, metadata.json,
+clip.json files, and the helper scripts under scripts/ -- are released under
+the most permissive license compatible with all subsets above (CC BY 4.0 for
+text, MIT for the helper scripts), unless stated otherwise in the respective
+file.
