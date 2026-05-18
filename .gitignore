@@ -3,4 +3,5 @@ wandb/
 *.egg-info/
 .vscode/*
 __pycache__/
-
+datasets/kine2go_refs/.cache/
+kine2go/

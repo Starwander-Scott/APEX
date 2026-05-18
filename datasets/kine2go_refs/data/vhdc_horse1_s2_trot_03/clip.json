@@ -1,0 +1,14 @@
+{
+  "name": "vhdc_horse1_s2_trot_03",
+  "source": "Vienna Horse Data Collection",
+  "source_url": "https://horse.cs.uni-bonn.de/vhdc-home.html",
+  "license": "CC BY-SA 4.0",
+  "attribution": "Vienna Horse Data Collection",
+  "fps": 60,
+  "n_frames": 571,
+  "duration_s": 9.517,
+  "description": "Horse 1, session 2, trot repetition 3",
+  "tags": [
+    "trot"
+  ]
+}
