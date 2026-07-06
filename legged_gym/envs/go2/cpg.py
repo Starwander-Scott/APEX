@@ -56,6 +56,18 @@ def phase_offsets(gait: str, device: torch.device | str | None = None) -> torch.
     return torch.tensor(offsets, dtype=torch.float32, device=device)
 
 
+def apply_residual_action(
+    q_cpg: torch.Tensor,
+    actions: torch.Tensor,
+    action_scale: float | torch.Tensor,
+    residual_scale: float,
+    hip_scale_reduction: float = 1.0,
+) -> torch.Tensor:
+    residual = actions * action_scale
+    residual[:, [0, 3, 6, 9]] *= hip_scale_reduction
+    return q_cpg + float(residual_scale) * residual
+
+
 class Go2JointCPG:
     """Simple sinusoidal joint-space CPG for Unitree Go2.
 

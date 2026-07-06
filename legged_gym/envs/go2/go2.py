@@ -16,6 +16,7 @@ import yaml
 
 from legged_gym.utils.calculate_raibert_gains import load_effort_limits_from_urdf, build_pd_gains_for_go2, build_alpha_tensor
 from legged_gym import LEGGED_GYM_ROOT_DIR, envs
+from legged_gym.envs.go2.cpg import CPGAmplitudes, Go2JointCPG, apply_residual_action
 
 def parallel_axis_theorem(I_com, mass, d):
 	"""
@@ -114,9 +115,18 @@ class Go2(LeggedRobot):
 		self.train_multi_skills = config["train_multi_skills"]
 		self.log_instantaneous_rmse = config.get("log_instantaneous_rmse", True)
 		self.rmse_log_interval = max(1, int(config.get("rmse_log_interval", 100)))
+		self.cpg_gait = config.get("cpg_gait", "trot")
+		self.cpg_frequency_hz = float(config.get("cpg_frequency_hz", 1.5))
+		self.cpg_residual_scale = float(config.get("cpg_residual_scale", 1.0))
+		self.cpg_amplitudes = CPGAmplitudes(
+			hip=float(config.get("cpg_hip_amplitude", 0.08)),
+			thigh=float(config.get("cpg_thigh_amplitude", 0.25)),
+			calf=float(config.get("cpg_calf_amplitude", 0.35)),
+		)
 		
 		# Call parent constructor
 		super().__init__(cfg, sim_params, physics_engine, sim_device, headless)
+		self.cpg = Go2JointCPG(self.num_envs, self.default_dof_pos, self.device)
 		# self._init_joint_impedance_and_scaling()
 		self._preprocess_imitation_data()
 	
@@ -224,6 +234,8 @@ class Go2(LeggedRobot):
 		self.last_foot_velocities[env_ids] = 0.
 		self.episode_length_buf[env_ids] = 0
 		self.reset_buf[env_ids] = 1
+		if hasattr(self, "cpg"):
+			self.cpg.reset(env_ids)
 		# fill extras
 		self.extras["episode"] = {}
 		if getattr(self.cfg.rewards, "multi_critic", False):
@@ -769,6 +781,24 @@ class Go2(LeggedRobot):
 			torques =  self.p_gains*self.Kp_factors*(self.joint_pos_target - self.dof_pos + self.motor_offsets) - self.Kd_factors*self.d_gains*self.dof_vel +  self.decap_factor*(self.p_gains*(dof_imit_arr - self.dof_pos))
 			# torques =  self.p_gains*self.Kp_factors*(self.joint_pos_target - self.dof_pos + self.motor_offsets) - self.Kd_factors*self.d_gains*self.dof_vel +  self.decap_factor*(p_gains_decap*(dof_imit_arr - self.dof_pos))
 		
+		elif control_type == 'cpg_residual_position':
+			frequency = torch.full((self.num_envs,), self.cpg_frequency_hz, device=self.device)
+			q_cpg = self.cpg.step(
+				gait=self.cpg_gait,
+				frequency_hz=frequency,
+				dt=self.dt,
+				amplitudes=self.cpg_amplitudes,
+			)
+			action_scale = self.action_alpha if hasattr(self, "action_alpha") else self.cfg.control.action_scale
+			self.joint_pos_target = apply_residual_action(
+				q_cpg=q_cpg,
+				actions=actions,
+				action_scale=action_scale,
+				residual_scale=self.cpg_residual_scale,
+				hip_scale_reduction=self.cfg.control.hip_scale_reduction,
+			)
+			torques = self.p_gains*self.Kp_factors*(self.joint_pos_target - self.dof_pos + self.motor_offsets) - self.Kd_factors*self.d_gains*self.dof_vel
+
 		elif control_type == 'apex_torque':
 			#Add the imitation bias along with the decap factor
 			torques = actions_scaled + self.decap_factor*(self.p_gains*(dof_imit_arr - self.dof_pos)- self.d_gains*self.dof_vel)

@@ -51,6 +51,25 @@ class Go2CPGTests(unittest.TestCase):
             self.assertTrue(torch.isfinite(targets).all())
             self.assertLessEqual(float(targets.abs().max()), 0.8)
 
+    def test_residual_target_combines_cpg_prior_and_scaled_actions(self):
+        module = load_module()
+        q_cpg = torch.full((2, 12), 0.5)
+        actions = torch.ones(2, 12)
+
+        target = module.apply_residual_action(
+            q_cpg=q_cpg,
+            actions=actions,
+            action_scale=0.2,
+            residual_scale=0.5,
+            hip_scale_reduction=0.25,
+        )
+
+        self.assertEqual(target.shape, (2, 12))
+        self.assertAlmostEqual(float(target[0, 0]), 0.525, places=5)
+        self.assertAlmostEqual(float(target[0, 1]), 0.6, places=5)
+        self.assertAlmostEqual(float(target[0, 3]), 0.525, places=5)
+        self.assertAlmostEqual(float(target[0, 4]), 0.6, places=5)
+
 
 if __name__ == "__main__":
     unittest.main()

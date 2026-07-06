@@ -8,9 +8,20 @@
 
 # control_type: "position"
 control_type: "apex_position"
+# control_type: "cpg_residual_position"
 # control_type: "play_retarget_angles"
 
 action_scale: 0.25  #scaling for action commands
+
+# CPG residual control is experimental and disabled by default. When
+# control_type is "cpg_residual_position", CPG generates the base joint target
+# and RL actions are interpreted as residual joint corrections.
+cpg_gait: "trot"  # walk | trot | pace | bound | canter | run
+cpg_frequency_hz: 1.5
+cpg_residual_scale: 1.0
+cpg_hip_amplitude: 0.08
+cpg_thigh_amplitude: 0.25
+cpg_calf_amplitude: 0.35
 
 # ============================================================================
 # ENVIRONMENT CONFIGURATION

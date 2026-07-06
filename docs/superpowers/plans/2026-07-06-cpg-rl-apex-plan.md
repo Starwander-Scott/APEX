@@ -186,6 +186,14 @@ q_cpg = default_dof_pos + amplitude * sin(phase + phase_offset)
 
 目标：新增一个最小侵入的控制模式，让 APEX 现有 policy 可以在 CPG 上做残差。
 
+当前实现状态：
+
+1. 已新增 `legged_gym/envs/go2/cpg.py`，提供 joint-space CPG 和 residual 组合函数。
+2. 已在 `param_config.yaml` 中加入 `cpg_residual_position` 的配置项，但默认仍保持 `apex_position`。
+3. 已在 `Go2._compute_torques()` 中加入 `cpg_residual_position` 分支。
+4. 已在 `reset_idx()` 中重置对应环境的 CPG phase。
+5. 尚未在 IsaacGym 中完成真实 rollout/训练验证。
+
 建议改动：
 
 ```text
@@ -222,6 +230,13 @@ torques = kp * (self.joint_pos_target - self.dof_pos) - kd * self.dof_vel
 2. `control_type: "cpg_residual_position"` 可以正常创建环境。
 3. 零动作时机器人执行 CPG-only。
 4. 非零动作时 RL residual 能调节 CPG 关节目标。
+
+本地可验证部分：
+
+```powershell
+python -m unittest discover -s tests -p 'test_*.py'
+python -m compileall .\legged_gym\envs\go2\cpg.py .\legged_gym\envs\go2\go2.py
+```
 
 ## 7. 阶段 4：多步态条件输入
 
