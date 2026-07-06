@@ -1,10 +1,10 @@
-# APEX 上实施情感风格 CPG-RL 的路线计划
+# APEX 上实施多步态 CPG-RL 的路线计划
 
 日期：2026-07-06
 
 ## 1. 结论
 
-APEX 可以作为我们后续实现“情感风格 CPG + 强化学习”的主工程底座，但不建议一上来直接训练复杂 CPG-RL。
+APEX 可以作为我们后续实现“CPG 生成多种步态 + 强化学习残差控制”的主工程底座，但不建议一上来直接训练复杂结构化 CPG-RL。
 
 更准确的判断是：
 
@@ -52,8 +52,8 @@ APEX 已经具备几个有利条件：
 
 1. 目前没有真正的 CPG 动作生成器。
 2. 目前 phase 更多是 reward/clock/接触目标，不是动作先验。
-3. 目前没有 calm/active 的运动特征体检报告。
-4. 目前没有情感风格条件输入，例如 `style_id`、style-conditioned CPG 参数。
+3. 目前还没有基于 gait family 的运动特征体检报告。
+4. 目前还没有 CPG 作为动作先验接入 Go2 控制链路。
 5. 需要 Isaac Gym + NVIDIA GPU 环境才能真正验证训练。
 
 ## 3. 阶段 0：先确认 APEX baseline 能跑
@@ -83,11 +83,11 @@ python legged_gym\scripts\train.py --task=go2_flat --headless --num_envs=128
 风险：
 
 1. 当前 Windows 环境通常不能直接跑 Isaac Gym 训练，需要 Linux/WSL 或服务器。
-2. `param_config.yaml` 当前指向 `go2_retarget_canter_2ms.csv`，后续分析 calm/active 时需要切换数据源。
+2. `param_config.yaml` 当前可能指向单一 imitation CSV，后续训练不同 gait 时需要显式管理数据源和 gait 参数。
 
 ## 4. 阶段 1：步态特征和数据体检
 
-目标：先证明 calm 和 active 在运动特征上真的有区别，而不是主观命名。
+目标：先不引入情绪概念，只量化 walk / trot / pace / canter / run 等 gait family 的运动差异。
 
 新增建议文件：
 
@@ -133,10 +133,12 @@ analysis/gait_features/00_gait_feature_report.md
 验收标准：
 
 1. 每个 motion 都有一行统计指标。
-2. 能用数据区分相对 calm 的 walk/pace 与 active 的 trot/canter。
+2. 能用数据比较不同 gait family 的速度、步频、foot clearance、body bounce 和 contact pattern。
 3. 产出 CPG 参数初值建议，例如：
-   - calm: lower frequency, lower clearance, lower body bounce
-   - active: higher frequency, higher clearance, stronger body bounce
+   - walk: 较低频率、较小幅度、四拍相位。
+   - trot: 对角腿同相、较高频率。
+   - pace: 同侧腿同相。
+   - canter/run: 更高速度和更大动态起伏。
 
 ## 5. 阶段 2：CPG-only baseline
 
@@ -163,20 +165,22 @@ q_cpg = default_dof_pos + amplitude * sin(phase + phase_offset)
 4. `thigh_amplitude`
 5. `calf_amplitude`
 6. `duty_factor`
-7. `style_id`
+7. `gait_family`
 
 支持的 gait：
 
-1. walk/calm
-2. trot/active
+1. walk
+2. trot
 3. pace
+4. bound
+5. canter
 
 验收标准：
 
 1. CPG 输出 shape 为 `[num_envs, 12]`。
 2. 输出关节角不超过 Go2 joint limits。
 3. 同一 gait 下 phase 连续，不发生跳变。
-4. calm 和 active 的频率、幅度、foot clearance 方向符合数据体检结论。
+4. 不同 gait 的相位关系符合四足运动学常识，例如 trot 为对角腿同相，pace 为同侧腿同相。
 
 ## 6. 阶段 3：接入 Go2 控制链路
 
@@ -201,9 +205,9 @@ control_type: "cpg_residual_position"
 
 ```python
 q_cpg = self.cpg.step(
+    gait=self.gait_family,
     dt=self.dt,
     commands=self.commands,
-    style_id=self.style_id,
 )
 delta_q = actions * self.cfg.control.action_scale
 self.joint_pos_target = q_cpg + residual_scale * delta_q
@@ -219,37 +223,37 @@ torques = kp * (self.joint_pos_target - self.dof_pos) - kd * self.dof_vel
 3. 零动作时机器人执行 CPG-only。
 4. 非零动作时 RL residual 能调节 CPG 关节目标。
 
-## 7. 阶段 4：情感风格条件输入
+## 7. 阶段 4：多步态条件输入
 
-目标：让同一个策略能够根据 style 条件生成 calm/active 风格差异。
+目标：让同一个策略能够根据 gait 条件生成不同步态，而不是根据情绪标签生成动作。
 
 建议新增配置：
 
 ```yaml
-style_conditioned: true
-style_ids: ["calm", "active"]
+gait_conditioned: true
+gait_families: ["walk", "trot", "pace", "bound", "canter"]
 ```
 
 观测中加入：
 
 ```text
-style_id 或 style_embedding
+gait_id 或 gait_embedding
 CPG phase sin/cos
 CPG base parameters
 ```
 
 训练初期建议：
 
-1. 先固定每个 episode 的 style。
-2. calm 对应 walk/pace 数据范围。
-3. active 对应 trot/canter 数据范围。
-4. reward 中加入 gait feature matching，而不是只 imitation joint angle。
+1. 先固定每个 episode 的 gait family。
+2. 每种 gait 对应一组 CPG phase offsets、frequency、amplitude 初值。
+3. reward 中加入 gait feature/contact pattern matching，而不是只 imitation joint angle。
+4. 稳定后再允许策略调整 CPG 频率、幅值和小幅关节残差。
 
 验收标准：
 
-1. 同一速度命令下，calm 与 active 的 body bounce、foot clearance、步频有统计差异。
-2. active 不只是速度更快，而是节律和姿态也更活跃。
-3. calm 不只是动作变小，而是更平稳、更低冲击。
+1. 同一速度命令下，不同 gait 的相位关系和 contact pattern 有统计差异。
+2. gait 切换不导致明显相位跳变或跌倒。
+3. RL residual 不破坏 CPG 的基本周期结构。
 
 ## 8. 阶段 5：从关节残差升级为结构化 CPG-RL
 
@@ -276,7 +280,7 @@ a_t = [
 验收标准：
 
 1. 比纯 12 维 residual 更省动作、更平滑。
-2. style 切换更连续。
+2. gait 切换更连续。
 3. foot slip 和 action rate 不恶化。
 
 ## 9. 阶段 6：评估和论文实验
@@ -298,8 +302,8 @@ a_t = [
 6. contact pattern match。
 7. body height/bounce。
 8. foot clearance。
-9. calm/active 风格可分性。
-10. 小规模用户感知实验：看视频判断情绪/活跃度。
+9. gait family 可分性。
+10. gait 切换平滑性。
 
 ## 10. 第一周可执行任务
 
@@ -311,7 +315,7 @@ a_t = [
 2. 写 `tools/gait_analysis/compute_gait_features.py`。
 3. 对 Kine2Go 和 animal_mocap 数据生成 `summary.csv`。
 4. 写 `analysis/gait_features/00_gait_feature_report.md`。
-5. 根据报告定出 calm/active 的 CPG 初始参数。
+5. 根据报告定出 walk/trot/pace/canter 的 CPG 初始参数。
 6. 写 `legged_gym/envs/go2/cpg.py` 的纯张量单元测试。
 7. 再决定是否接入 `go2.py` 的控制链路。
 
@@ -319,14 +323,14 @@ a_t = [
 
 1. 确认是否有可用的 Linux + NVIDIA GPU + Isaac Gym 环境。
 2. 确认研究对象主要是 Unitree Go2，还是未来要迁移到 A1/Go1。
-3. 确认 emotion labels 的第一版只做 calm/active，还是加入 happy/alert/tired。
+3. 确认第一版 gait 集合：建议先做 walk/trot/pace，再扩展 canter/bound。
 4. 如果要做真实机器狗，需要提供 Unitree SDK/部署机器的环境信息。
 5. 如果要做用户感知实验，需要后续设计问卷和伦理/数据记录方式。
 
 ## 12. 不建议现在做的事
 
 1. 不建议马上把 action dim 改成复杂的 `Delta f, Delta A, Delta p_foot, Delta q`。
-2. 不建议只靠奖励函数强行学出 calm/active，因为解释性会弱。
+2. 不建议只靠奖励函数强行学出 gait，因为相位结构会不稳定、解释性也弱。
 3. 不建议一开始就做足端 IK，全 foot-space CPG 容易把问题扩大。
 4. 不建议直接上真实机器狗，先在仿真里证明 CPG-only 和 CPG-RL 的差异。
 
@@ -335,9 +339,9 @@ a_t = [
 最小论文原型可以定义为：
 
 1. APEX/Go2 仿真环境能跑。
-2. motion 数据体检证明 calm/active 的运动特征不同。
-3. CPG-only 能生成可解释的 calm/active 节律。
-4. CPG+RL residual 比 CPG-only 更稳，比纯 imitation/action prior 更容易控制风格。
-5. 视频或指标能让人看出 calm 与 active 的差异。
+2. motion 数据体检证明不同 gait family 的运动特征不同。
+3. CPG-only 能生成可解释的 walk/trot/pace/canter 节律。
+4. CPG+RL residual 比 CPG-only 更稳，比纯 imitation/action prior 更容易控制步态。
+5. 视频或指标能清楚区分不同 gait，并证明切换足够平滑。
 
 达到这个程度，就可以开始写项目立项和初版实验设计。

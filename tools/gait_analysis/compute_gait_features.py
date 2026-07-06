@@ -184,22 +184,26 @@ def joint_limit_violation_count(df: pd.DataFrame) -> int:
     return count
 
 
-def infer_style_guess(features: dict[str, float]) -> str:
-    speed = features.get("speed_abs_mean", math.nan)
-    clearance = features.get("foot_clearance_mean", math.nan)
-    bounce = features.get("body_bounce_std", math.nan)
-    step_freq = features.get("step_frequency_hz", math.nan)
-
-    score = 0
-    if math.isfinite(speed) and speed >= 0.8:
-        score += 1
-    if math.isfinite(clearance) and clearance >= 0.08:
-        score += 1
-    if math.isfinite(bounce) and bounce >= 0.01:
-        score += 1
-    if math.isfinite(step_freq) and step_freq >= 1.4:
-        score += 1
-    return "active" if score >= 2 else "calm"
+def infer_gait_family(motion_name: str) -> str:
+    name = motion_name.lower()
+    keyword_map = (
+        ("canter", "canter"),
+        ("trot", "trot"),
+        ("pace", "pace"),
+        ("bound", "bound"),
+        ("run", "run"),
+        ("walk", "walk"),
+        ("crawl", "crawl"),
+        ("jump", "jump"),
+        ("hopturn", "turn"),
+        ("turn", "turn"),
+        ("sidestep", "lateral"),
+        ("strafe", "lateral"),
+    )
+    for keyword, family in keyword_map:
+        if keyword in name:
+            return family
+    return "unknown"
 
 
 def compute_motion_features(csv_path: Path | str, fps: float = 50.0) -> dict[str, float | str | int]:
@@ -223,6 +227,7 @@ def compute_motion_features(csv_path: Path | str, fps: float = 50.0) -> dict[str
     features: dict[str, float | str | int] = {
         "motion": csv_path.stem,
         "source_dir": csv_path.parent.name,
+        "gait_family": infer_gait_family(csv_path.stem),
         "path": str(csv_path),
         "frames": int(len(df)),
         "duration_s": float(duration_s),
@@ -242,7 +247,6 @@ def compute_motion_features(csv_path: Path | str, fps: float = 50.0) -> dict[str
         "joint_limit_violation_count": joint_limit_violation_count(df),
     }
     features.update(foot_features)
-    features["style_guess"] = infer_style_guess(features)  # type: ignore[arg-type]
     return features
 
 
@@ -262,11 +266,11 @@ def discover_motion_csvs(paths: Iterable[Path]) -> list[Path]:
 
 def write_report(summary: pd.DataFrame, output_dir: Path) -> Path:
     report_path = output_dir / "00_gait_feature_report.md"
-    style_counts = summary["style_guess"].value_counts().to_dict() if "style_guess" in summary else {}
+    family_counts = summary["gait_family"].value_counts().to_dict() if "gait_family" in summary else {}
     columns = [
         "motion",
         "source_dir",
-        "style_guess",
+        "gait_family",
         "speed_abs_mean",
         "step_frequency_hz",
         "foot_clearance_mean",
@@ -278,41 +282,36 @@ def write_report(summary: pd.DataFrame, output_dir: Path) -> Path:
     ]
     available_columns = [column for column in columns if column in summary.columns]
     ranked = summary.sort_values(
-        by=["style_guess", "speed_abs_mean", "foot_clearance_mean"],
+        by=["gait_family", "speed_abs_mean", "foot_clearance_mean"],
         ascending=[True, False, False],
     )[available_columns]
-    calm_candidates = summary[summary["style_guess"].eq("calm")].sort_values(
-        by=["speed_abs_mean", "body_bounce_std", "foot_clearance_mean"],
-        ascending=[True, True, True],
-    )[available_columns].head(10)
-    active_candidates = summary[summary["style_guess"].eq("active")].sort_values(
-        by=["speed_abs_mean", "foot_clearance_mean", "body_bounce_std"],
-        ascending=[False, False, False],
-    )[available_columns].head(10)
+    family_summary = summary.groupby("gait_family", dropna=False).agg(
+        motions=("motion", "count"),
+        speed_abs_mean=("speed_abs_mean", "mean"),
+        step_frequency_hz=("step_frequency_hz", "mean"),
+        foot_clearance_mean=("foot_clearance_mean", "mean"),
+        body_bounce_std=("body_bounce_std", "mean"),
+    ).reset_index().sort_values("gait_family")
 
     lines = [
-        "# 步态特征体检报告",
+        "# 多步态特征体检报告",
         "",
-        "本报告由 APEX imitation motion CSV 自动生成，用于在正式训练前判断不同 motion 的运动风格差异。",
+        "本报告由 APEX imitation motion CSV 自动生成，用于在正式训练前判断不同 gait family 的运动特征差异。",
         "",
         "## 数据集概况",
         "",
         f"- 分析 motion 数量：{len(summary)}",
-        f"- 启发式风格计数：{style_counts}",
+        f"- gait family 计数：{family_counts}",
         "",
-        "## 第一版 calm / active 划分建议",
+        "## 第一版多步态建模建议",
         "",
-        "- calm 候选：速度较低、抬脚高度较低、身体起伏较小。",
-        "- active 候选：速度较高、抬脚高度较高、身体起伏或步频更明显。",
-        "- `style_guess` 只是启发式标签，不是最终情绪标签；后续应结合视频和主观感知再确认。",
+        "- 先不要引入情绪标签，优先把 walk / trot / pace / canter / bound 等 gait 的周期结构做对。",
+        "- CPG 负责提供相位、频率、基础关节轨迹；RL 后续只学习 residual 或少量 CPG 参数修正。",
+        "- `gait_family` 来自 motion 文件名关键词，只用于整理数据，不代表已完成接触序列识别。",
         "",
-        "## calm 候选 motion",
+        "## gait family 均值",
         "",
-        calm_candidates.to_markdown(index=False, floatfmt=".4f"),
-        "",
-        "## active 候选 motion",
-        "",
-        active_candidates.to_markdown(index=False, floatfmt=".4f"),
+        family_summary.to_markdown(index=False, floatfmt=".4f"),
         "",
         "## 全量 motion 指标",
         "",

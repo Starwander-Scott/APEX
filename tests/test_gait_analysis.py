@@ -19,12 +19,12 @@ def load_module():
 
 
 class GaitAnalysisTests(unittest.TestCase):
-    def write_motion_csv(self, directory: Path, name: str, active: bool = False) -> Path:
+    def write_motion_csv(self, directory: Path, name: str, fast: bool = False) -> Path:
         rows = []
         fps = 50.0
-        frequency_hz = 2.0 if active else 1.0
-        speed = 1.2 if active else 0.35
-        clearance = 0.12 if active else 0.04
+        frequency_hz = 2.0 if fast else 1.0
+        speed = 1.2 if fast else 0.35
+        clearance = 0.12 if fast else 0.04
         for i in range(100):
             phase = 2.0 * math.pi * frequency_hz * (i / fps)
             row = {
@@ -33,11 +33,11 @@ class GaitAnalysisTests(unittest.TestCase):
                 "vz": 0.0,
                 "wx": 0.0,
                 "wy": 0.0,
-                "wz": 0.05 if active else 0.01,
+                "wz": 0.05 if fast else 0.01,
                 "com_vx": speed,
                 "com_vy": 0.0,
                 "com_wz": 0.0,
-                "height": 0.32 + (0.015 if active else 0.004) * math.sin(phase),
+                "height": 0.32 + (0.015 if fast else 0.004) * math.sin(phase),
                 "quat_x": 0.0,
                 "quat_y": 0.0,
                 "quat_z": 0.0,
@@ -78,11 +78,13 @@ class GaitAnalysisTests(unittest.TestCase):
     def test_compute_motion_features_extracts_core_gait_metrics(self):
         module = load_module()
         with tempfile.TemporaryDirectory() as temp_dir:
-            csv_path = self.write_motion_csv(Path(temp_dir), "calm_walk.csv", active=False)
+            csv_path = self.write_motion_csv(Path(temp_dir), "ai4_dog_walk_00.csv", fast=False)
 
             features = module.compute_motion_features(csv_path, fps=50.0)
 
-        self.assertEqual(features["motion"], "calm_walk")
+        self.assertEqual(features["motion"], "ai4_dog_walk_00")
+        self.assertEqual(features["gait_family"], "walk")
+        self.assertNotIn("style_guess", features)
         self.assertAlmostEqual(features["speed_abs_mean"], 0.35, places=2)
         self.assertAlmostEqual(features["body_height_mean"], 0.32, places=2)
         self.assertGreater(features["body_bounce_std"], 0.0)
@@ -92,20 +94,20 @@ class GaitAnalysisTests(unittest.TestCase):
         self.assertLess(features["contact_duty_factor_mean"], 1.0)
         self.assertEqual(features["joint_limit_violation_count"], 0)
 
-    def test_style_guess_separates_active_from_calm_motion(self):
+    def test_gait_family_comes_from_motion_identity_not_emotion_style(self):
         module = load_module()
         with tempfile.TemporaryDirectory() as temp_dir:
-            calm_csv = self.write_motion_csv(Path(temp_dir), "calm_walk.csv", active=False)
-            active_csv = self.write_motion_csv(Path(temp_dir), "active_trot.csv", active=True)
+            walk_csv = self.write_motion_csv(Path(temp_dir), "ai4_dog_walk_00.csv", fast=False)
+            trot_csv = self.write_motion_csv(Path(temp_dir), "go2_retarget_trot.csv", fast=True)
 
-            calm = module.compute_motion_features(calm_csv, fps=50.0)
-            active = module.compute_motion_features(active_csv, fps=50.0)
+            walk = module.compute_motion_features(walk_csv, fps=50.0)
+            trot = module.compute_motion_features(trot_csv, fps=50.0)
 
-        self.assertEqual(calm["style_guess"], "calm")
-        self.assertEqual(active["style_guess"], "active")
-        self.assertGreater(active["speed_abs_mean"], calm["speed_abs_mean"])
-        self.assertGreater(active["foot_clearance_mean"], calm["foot_clearance_mean"])
-        self.assertGreater(active["body_bounce_std"], calm["body_bounce_std"])
+        self.assertEqual(walk["gait_family"], "walk")
+        self.assertEqual(trot["gait_family"], "trot")
+        self.assertGreater(trot["speed_abs_mean"], walk["speed_abs_mean"])
+        self.assertGreater(trot["foot_clearance_mean"], walk["foot_clearance_mean"])
+        self.assertGreater(trot["body_bounce_std"], walk["body_bounce_std"])
 
 
 if __name__ == "__main__":
