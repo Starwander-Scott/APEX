@@ -7,8 +7,8 @@
 #   - "play_retarget_angles" → visualize imitation trajectories
 
 # control_type: "position"
-control_type: "apex_position"
-# control_type: "cpg_residual_position"
+# control_type: "apex_position"
+control_type: "cpg_residual_position"
 # control_type: "play_retarget_angles"
 
 action_scale: 0.25  #scaling for action commands
@@ -27,7 +27,7 @@ cpg_calf_amplitude: 0.35
 # ENVIRONMENT CONFIGURATION
 # ============================================================================
 
-num_envs: 4096
+num_envs: 256
 control_decimation: 4
 episode_length: 20
 #For canter, trot, pace, amble gaits: 19, for all gait 32, for sidesteps and hopturn 3
