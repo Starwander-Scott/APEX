@@ -4,11 +4,14 @@
 # control_type options:
 #   - "position"          → regular position control (default for inference)
 #   - "apex_position"     → position control + action priors
+#   - "cpg_residual_position" → joint-space CPG + RL residual
+#   - "cpg_hopf_position" → foot-space Hopf CPG + IK + RL residual
 #   - "play_retarget_angles" → visualize imitation trajectories
 
 # control_type: "position"
 # control_type: "apex_position"
-control_type: "cpg_residual_position"
+control_type: "cpg_hopf_position"
+# control_type: "cpg_residual_position"
 # control_type: "play_retarget_angles"
 
 action_scale: 0.25  #scaling for action commands
@@ -18,10 +21,25 @@ action_scale: 0.25  #scaling for action commands
 # and RL actions are interpreted as residual joint corrections.
 cpg_gait: "trot"  # walk | trot | pace | bound | canter | run
 cpg_frequency_hz: 1.5
-cpg_residual_scale: 1.0
+cpg_residual_scale: 0.0
 cpg_hip_amplitude: 0.08
 cpg_thigh_amplitude: 0.25
 cpg_calf_amplitude: 0.35
+
+# ── Hopf CPG parameters (control_type: "cpg_hopf_position") ──
+cpg_hopf_enabled: true
+cpg_hopf_mu: 1.0
+cpg_hopf_alpha: 50.0
+cpg_hopf_omega_swing: 10.0
+cpg_hopf_omega_stance: 5.0
+cpg_hopf_ground_clearance: 0.06
+cpg_hopf_ground_penetration: 0.005
+cpg_hopf_des_step_len: 0.08
+cpg_hopf_robot_height: 0.30
+cpg_hopf_coupling_strength: 1.0
+cpg_hopf_thigh_length: 0.20
+cpg_hopf_calf_length: 0.20
+cpg_hopf_hip_lateral_offset: 0.08
 
 # ============================================================================
 # ENVIRONMENT CONFIGURATION

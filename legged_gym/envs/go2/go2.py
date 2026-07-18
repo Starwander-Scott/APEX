@@ -17,6 +17,7 @@ import yaml
 from legged_gym.utils.calculate_raibert_gains import load_effort_limits_from_urdf, build_pd_gains_for_go2, build_alpha_tensor
 from legged_gym import LEGGED_GYM_ROOT_DIR, envs
 from legged_gym.envs.go2.cpg import CPGAmplitudes, Go2JointCPG, apply_residual_action
+from legged_gym.envs.go2.hopf_cpg import Go2HopfCPG, HopfCPGParams
 
 def parallel_axis_theorem(I_com, mass, d):
 	"""
@@ -123,10 +124,30 @@ class Go2(LeggedRobot):
 			thigh=float(config.get("cpg_thigh_amplitude", 0.25)),
 			calf=float(config.get("cpg_calf_amplitude", 0.35)),
 		)
+		self.cpg_hopf_enabled = config.get("cpg_hopf_enabled", False)
+		self.cpg_hopf_params = HopfCPGParams(
+			mu=float(config.get("cpg_hopf_mu", 1.0)),
+			alpha=float(config.get("cpg_hopf_alpha", 50.0)),
+			omega_swing=float(config.get("cpg_hopf_omega_swing", 10.0)),
+			omega_stance=float(config.get("cpg_hopf_omega_stance", 5.0)),
+			ground_clearance=float(config.get("cpg_hopf_ground_clearance", 0.06)),
+			ground_penetration=float(config.get("cpg_hopf_ground_penetration", 0.005)),
+			des_step_len=float(config.get("cpg_hopf_des_step_len", 0.08)),
+			robot_height=float(config.get("cpg_hopf_robot_height", 0.30)),
+			coupling_strength=float(config.get("cpg_hopf_coupling_strength", 1.0)),
+			thigh_length=float(config.get("cpg_hopf_thigh_length", 0.20)),
+			calf_length=float(config.get("cpg_hopf_calf_length", 0.20)),
+			hip_lateral_offset=float(config.get("cpg_hopf_hip_lateral_offset", 0.08)),
+		)
 		
 		# Call parent constructor
 		super().__init__(cfg, sim_params, physics_engine, sim_device, headless)
 		self.cpg = Go2JointCPG(self.num_envs, self.default_dof_pos, self.device)
+		if self.cpg_hopf_enabled:
+			self.cpg_hopf = Go2HopfCPG(
+				self.num_envs, self.default_dof_pos, self.device,
+				params=self.cpg_hopf_params,
+			)
 		# self._init_joint_impedance_and_scaling()
 		self._preprocess_imitation_data()
 	
@@ -236,6 +257,8 @@ class Go2(LeggedRobot):
 		self.reset_buf[env_ids] = 1
 		if hasattr(self, "cpg"):
 			self.cpg.reset(env_ids)
+		if hasattr(self, "cpg_hopf"):
+			self.cpg_hopf.reset(env_ids, gait=self.cpg_gait)
 		# fill extras
 		self.extras["episode"] = {}
 		if getattr(self.cfg.rewards, "multi_critic", False):
@@ -798,6 +821,29 @@ class Go2(LeggedRobot):
 				hip_scale_reduction=self.cfg.control.hip_scale_reduction,
 			)
 			torques = self.p_gains*self.Kp_factors*(self.joint_pos_target - self.dof_pos + self.motor_offsets) - self.Kd_factors*self.d_gains*self.dof_vel
+
+		elif control_type == 'cpg_hopf_position':
+			# Hopf CPG: oscillator → joint-space targets from default pose
+			_feet, q_cpg = self.cpg_hopf.step(
+				gait=self.cpg_gait,
+				dt=self.dt,
+			)
+			# RL residual in joint space
+			action_scale = self.action_alpha if hasattr(self, "action_alpha") else self.cfg.control.action_scale
+			self.joint_pos_target = apply_residual_action(
+				q_cpg=q_cpg,
+				actions=actions,
+				action_scale=action_scale,
+				residual_scale=self.cpg_residual_scale,
+				hip_scale_reduction=self.cfg.control.hip_scale_reduction,
+			)
+			# PD torque + gravity compensation bias toward default pose
+			grav_comp = 0.3  # anti-gravity stiffness fraction
+			torques = (self.p_gains * self.Kp_factors
+			           * (self.joint_pos_target - self.dof_pos + self.motor_offsets)
+			           + grav_comp * self.p_gains
+			           * (self.default_dof_pos - self.dof_pos)
+			           - self.Kd_factors * self.d_gains * self.dof_vel)
 
 		elif control_type == 'apex_torque':
 			#Add the imitation bias along with the decap factor
